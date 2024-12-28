@@ -8,3 +8,8 @@ class Chat(StatesGroup):
 class Image(StatesGroup):
     text = State()
     wait = State()
+
+class Admins(StatesGroup):
+    add_channel = State()
+    delete_channel = State()
+    wait_id = State()

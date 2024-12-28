@@ -1,7 +1,7 @@
-from sqlalchemy import Column, Integer, BigInteger, String, Enum, DateTime, Boolean, ForeignKey
+from sqlalchemy import Column, Integer, BigInteger, String, Enum, DateTime, Boolean, ForeignKey, Date
 from sqlalchemy.orm import Mapped, mapped_column, DeclarativeBase
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
-from datetime import datetime
+from datetime import datetime, date
 
 
 engine = create_async_engine(url='sqlite+aiosqlite:///db.sqlite3', echo=True)
@@ -18,7 +18,8 @@ class User(Base):
     tg_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)  # Telegram ID
     subscription_id: Mapped[int] = mapped_column(Integer, ForeignKey('subscriptions.id'), nullable=False)  # Связь с подпиской
     gpt_model: Mapped[str] = mapped_column(String, default='gpt-4o-mini')
-
+    verification_free: Mapped[bool] = mapped_column(Boolean, default=False)
+    registration_date: Mapped[date] = mapped_column(Date, default=date.today)  # Дата регистрации
 
 
 # Модель тарифа
@@ -34,7 +35,6 @@ class Subscription(Base):
     gpt_4_omni_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит GPT 4o Omni
     gpt_o1_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит GPT 4o Omni
     dalle_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит DALL-E
-    unlimited_gpt_4_mini: Mapped[bool] = mapped_column(Boolean, default=False)  # Безлимитный GPT 4o Mini
 
 
 class Channels(Base):

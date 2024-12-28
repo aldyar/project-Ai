@@ -2,11 +2,11 @@ from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery
 import app.keyboards as kb
-from app.text import hello_text,support_text,tarif_text
+import app.text as txt
 from app.database.request import (set_user, get_gpt_model, get_user_plan_name, 
-                                  change_gpt4, check_gpt_limit, check_unlimit_gpt, 
-                                  decrement_gpt_limit, check_subscription,check_user_subscription)
-from app.generators import gpt_text, gpt_image
+                                  change_gpt4, check_gpt_limit,
+                                  decrement_gpt_limit,check_user_subscription,reset_limits, update_free_user_limits)
+from app.generators import gpt_text, gpt_image, get_balance
 from app.state import Chat, Image
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ChatAction
@@ -22,7 +22,7 @@ user = Router()
 async def cmd_start(message: Message, state: FSMContext):
     await state.clear()
     await set_user(message.from_user.id)
-    await message.answer(hello_text, reply_markup= kb.main_user)
+    await message.answer(txt.hello_text, reply_markup= kb.main_user)
     
 
 @user.message(F.text=='Создать новый чат')
@@ -32,7 +32,9 @@ async def chatting(message: Message, state: FSMContext, bot: Bot):
     plan = await get_user_plan_name(message.from_user.id)
     podpiski = await check_user_subscription(bot, message.from_user.id)
     if limit == 0 and plan == 'free' and podpiski == False:
-        await message.answer('Вы не подписаны',reply_markup=kb.check_channels)
+        await message.answer(txt.free_limit_text,reply_markup=kb.check_channels)
+    elif limit == 0 and plan == 'free' and podpiski == True:
+        await message.answer(txt.free_limit_textact,reply_markup=kb.tarif_inline)
     else:
         if model == 'dall-e-3':
             await state.set_state(Image.text)
@@ -61,7 +63,7 @@ async def chat_response(message: Message, state: FSMContext):
 async def generate_text(message: Message, state: FSMContext):
     model = await get_gpt_model(message.from_user.id)
     subscription = await get_user_plan_name(message.from_user.id)
-    if subscription == "premium" and model == "gpt-4o-mini":
+    if subscription in ["premium", "start"] and model == "gpt-4o-mini":
         await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.TYPING)
         await state.set_state(Chat.wait)
         response = await gpt_text(message.text, model)
@@ -98,12 +100,18 @@ async def models(message: Message):
 
 @user.message(F.text=='Поддержка')
 async def support(message:Message):
-    await message.answer(support_text, reply_markup=kb.support_inline)
+    await message.answer(txt.support_text, reply_markup=kb.support_inline)
 
 
 @user.message(F.text =='Тарифы')
 async def tarif(message: Message):
-    await message.answer(tarif_text,reply_markup=kb.tarify_inline)
+    await message.answer(txt.tarif_text,reply_markup=kb.tarify_inline)
+
+
+@user.callback_query(F.data == 'tarif')
+async def tarif_inline( callback: CallbackQuery):
+    await callback.message.answer(txt.tarif_text,reply_markup=kb.tarify_inline)
+    await callback.answer()
 
 
 @user.message(F.text == 'Профиль')
@@ -206,7 +214,7 @@ async def change_gpt_4(message:Message):
 async def check(message: Message,bot: Bot):
     status = await check_user_subscription(bot, message.from_user.id )
     if status == True:
-        await message.answer('Вы подписаны')
+        await message.answer(txt.podpiska_activna)
     else:
         await message.answer('Вы ne подписаны')
 
