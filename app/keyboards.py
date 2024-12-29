@@ -53,7 +53,8 @@ main_admin = ReplyKeyboardMarkup(keyboard=[
 admin_menu = ReplyKeyboardMarkup(keyboard=[
                                      [KeyboardButton(text = 'Вернуться в главное меню')],
                                      [KeyboardButton(text= 'Управление пользователями'),
-                                     KeyboardButton(text = 'Управление каналами')]],
+                                     KeyboardButton(text = 'Управление каналами')],
+                                     [KeyboardButton(text = 'Управление рекламными блоками')]],
                            resize_keyboard=True,input_field_placeholder='Выберите пункт меню.')
 
 refresh_inline = InlineKeyboardMarkup(inline_keyboard=[
@@ -73,3 +74,26 @@ setting_user_inline = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='Start', callback_data='refresh')],
     [InlineKeyboardButton(text='Premium', callback_data='refresh')],
 ])
+
+def inline_keyboard(channels):
+    inline_keyboard = [
+        [InlineKeyboardButton(text=f"Подписаться #{idx}", url=f"https://t.me/{channel.channel_name[1:]}")]
+        for idx, channel in enumerate(channels, start=1)
+    ]
+    inline_keyboard.append([InlineKeyboardButton(text="ВЫБРАТЬ ТАРИФ", callback_data="tarif")])
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+back = ReplyKeyboardMarkup(keyboard=[
+                                     [KeyboardButton(text= 'Главное меню')]],
+                           resize_keyboard=True)
+
+off_advert = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text='Отключить рекламу', callback_data='tarif')]
+])
+
+
+advert_setting = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text = 'Добавить блок'),
+     KeyboardButton(text='Удалить блок')],
+     [KeyboardButton(text = 'Назад')]
+],resize_keyboard=True)

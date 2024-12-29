@@ -3,9 +3,10 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import Message, CallbackQuery
 import app.keyboards as kb
 import app.text as txt
-from app.database.request import (set_user, get_gpt_model, get_user_plan_name, 
-                                  change_gpt4, check_gpt_limit,
-                                  decrement_gpt_limit,check_user_subscription,reset_limits, update_free_user_limits)
+from app.database.request import (set_user, get_gpt_model, get_user_plan_name,get_all_adverts,
+                                  change_gpt4, check_gpt_limit,get_all_channels,check_all_gpt_limits,
+                                  decrement_gpt_limit,check_user_subscription,reset_limits, update_free_user_limits,
+                                  set_user_advert_index,get_user_advert_index)
 from app.generators import gpt_text, gpt_image, get_balance
 from app.state import Chat, Image
 from aiogram.fsm.context import FSMContext
@@ -16,7 +17,7 @@ from aiogram import Bot
 
 user = Router()
 
-
+@user.message(F.text =='Главное меню')
 @user.message(F.text=='Выйти из чата')
 @user.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext):
@@ -32,9 +33,15 @@ async def chatting(message: Message, state: FSMContext, bot: Bot):
     plan = await get_user_plan_name(message.from_user.id)
     podpiski = await check_user_subscription(bot, message.from_user.id)
     if limit == 0 and plan == 'free' and podpiski == False:
-        await message.answer(txt.free_limit_text,reply_markup=kb.check_channels)
+        channels = await get_all_channels()
+        await message.answer(txt.free_limit_text,reply_markup=kb.inline_keyboard(channels))
+        await message.answer('Можете проверить подписку по кнопке ниже⬇️',reply_markup=kb.check_channels)
     elif limit == 0 and plan == 'free' and podpiski == True:
         await message.answer(txt.free_limit_textact,reply_markup=kb.tarif_inline)
+    elif limit == 0 and plan in ["premium", "start"] and model in['gpt-4','gpt-4o','dall-e-3','o1-mini']:
+        await message.answer('У закончился лимит, смените модель',reply_markup=kb.main_user)
+    elif limit == 0 and plan == 'mini' and model in ['gpt-4o-mini','gpt-4','gpt-4o','dall-e-3','o1-mini']:
+        await message.answer('У закончился лимит, смените модель',reply_markup=kb.main_user)
     else:
         if model == 'dall-e-3':
             await state.set_state(Image.text)
@@ -46,41 +53,65 @@ async def chatting(message: Message, state: FSMContext, bot: Bot):
 
 @user.message(Image.text)
 async def chat_response(message: Message, state: FSMContext):
-    await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.UPLOAD_PHOTO)
-    await state.set_state(Image.wait)
+    limit = await check_gpt_limit(message.from_user.id,model)
     model = await get_gpt_model(message.from_user.id)
-    response = await gpt_image(message.text, model)
-    print(response)
-    try:
+    if limit == 0:
+        await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
+        await state.clear()
+    else:
+        await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.UPLOAD_PHOTO)
+        await state.set_state(Image.wait)
+        await decrement_gpt_limit(message.from_user.id, model)
+        response = await gpt_image(message.text, model)
         await message.answer_photo(photo=response['response'])
-    except Exception as e:
-        print(e)
-        await message.answer(response['response'])
-    await state.set_state(Image.text)
- 
+        await state.set_state(Image.text)
+
 
 @user.message(Chat.text)
 async def generate_text(message: Message, state: FSMContext):
     model = await get_gpt_model(message.from_user.id)
     subscription = await get_user_plan_name(message.from_user.id)
-    if subscription in ["premium", "start"] and model == "gpt-4o-mini":
-        await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.TYPING)
-        await state.set_state(Chat.wait)
-        response = await gpt_text(message.text, model)
-        await message.answer(response, parse_mode='Markdown')
-        await state.set_state(Chat.text)
+    limit = await check_gpt_limit(message.from_user.id,model)
+    if limit == 0:
+        await state.clear()
+        await message.answer('У вас закончился лимит', reply_markup=kb.main_user)
     else:
-        limit = await check_gpt_limit(message.from_user.id, model)
-        if limit > 0: 
+        if subscription == 'free':
+            limit = await check_gpt_limit(message.from_user.id, model)
+            if limit > 0: 
+                await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.TYPING)
+                await state.set_state(Chat.wait)
+                adverts = await get_all_adverts()
+                current_index = await get_user_advert_index(message.from_user.id)
+                next_index = (current_index + 1) % len(adverts)
+                next_advert = adverts[next_index]
+                await set_user_advert_index(message.from_user.id, next_index)
+                response = await gpt_text(message.text, model)
+                await decrement_gpt_limit(message.from_user.id, model)
+                await message.answer(response, parse_mode='Markdown')
+                await message.answer(f"_Реклама_\n\n  {next_advert}", parse_mode='Markdown',reply_markup=kb.off_advert)
+                await state.set_state(Chat.text)
+            else:
+                await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
+                await state.clear()
+        elif subscription in ["premium", "start"] and model == "gpt-4o-mini":
             await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.TYPING)
             await state.set_state(Chat.wait)
             response = await gpt_text(message.text, model)
-            await decrement_gpt_limit(message.from_user.id, model)
             await message.answer(response, parse_mode='Markdown')
             await state.set_state(Chat.text)
         else:
-            await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
-            await state.clear()
+            limit = await check_gpt_limit(message.from_user.id, model)
+            if limit > 0: 
+                await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.TYPING)
+                await state.set_state(Chat.wait)
+                response = await gpt_text(message.text, model)
+                await decrement_gpt_limit(message.from_user.id, model)
+                await message.answer(response, parse_mode='Markdown')
+                await state.set_state(Chat.text)
+            else:
+                await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
+                await state.clear()
 
 
 @user.message(Image.wait)
@@ -93,13 +124,19 @@ async def wait_wait(message:Message):
     await message.answer('Ваше сообщение генеируется, подождите...')
 
 
-@user.message(F.text=='Смена модели')
+@user.message(F.text == 'Смена модели')
 async def models(message: Message):
-    await message.answer('Выберите модель..', reply_markup=kb.models_user)
+    plan = await get_user_plan_name(message.from_user.id)
+    limits = await check_all_gpt_limits(message.from_user.id)
+    await message.answer(txt.change_model(plan,limits), reply_markup=kb.models_user, parse_mode="HTML")
 
 
 @user.message(F.text=='Поддержка')
 async def support(message:Message):
+    adverts = await get_all_adverts()  # Получаем только тексты объявлений
+    if adverts:  # Если объявления существуют
+        text = "\n\n".join(adverts)
+    await message.answer(text)
     await message.answer(txt.support_text, reply_markup=kb.support_inline)
 
 
@@ -109,7 +146,8 @@ async def tarif(message: Message):
 
 
 @user.callback_query(F.data == 'tarif')
-async def tarif_inline( callback: CallbackQuery):
+async def tarif_inline( callback: CallbackQuery, state: FSMContext):
+    await state.clear()
     await callback.message.answer(txt.tarif_text,reply_markup=kb.tarify_inline)
     await callback.answer()
 
@@ -139,14 +177,21 @@ async def change_gpt_4(message: Message):
     subscription = await get_user_plan_name(message.from_user.id)
     if subscription == "premium":
         await change_gpt4(message.from_user.id, model)
-        await message.answer('Ваша модель изменена...', reply_markup=kb.main_user)
-    else:
+        await message.answer('Ваша модель изменена', reply_markup=kb.main_user)
+    elif subscription =='mini':
         limit = await check_gpt_limit(message.from_user.id, model)
         if limit > 0: 
             await change_gpt4(message.from_user.id, model)
-            await message.answer('Ваша модель изменена...', reply_markup=kb.main_user)
+            await message.answer('Ваша модель изменена', reply_markup=kb.main_user)
         else:
-            await message.answer('У вас превышен лимит.')
+            await message.answer(txt.gpt4mini_text, reply_markup=kb.tarif_inline)
+    elif subscription =='free':
+        limit = await check_gpt_limit(message.from_user.id, model)
+        if limit > 0:
+            await change_gpt4(message.from_user.id, model)
+            await message.answer('Ваша модель изменена', reply_markup=kb.main_user)
+        else:
+            await message.answer(txt.free_limit_textact, reply_markup=kb.tarif_inline)
 
 
 @user.message(F.text=='GPT 4')
@@ -159,9 +204,9 @@ async def change_gpt_4(message:Message):
             await change_gpt4(message.from_user.id,model)
             await message.answer('Ваша модель изменена...',reply_markup=kb.main_user)
         else:
-            await message.answer('У вас превышен лимит.')
+            await message.answer('У вас закончился дневной лимит, он обновится в 00:00 по МСК')
     else:
-        await message.answer('У вас нет доступа к этой модели')
+        await message.answer(txt.free_choice_model,reply_markup=kb.tarif_inline)
 
 
 @user.message(F.text=='GPT 4o Omni')
@@ -172,11 +217,11 @@ async def change_gpt_4(message:Message):
         limit = await check_gpt_limit(message.from_user.id, model)
         if limit>0:
             await change_gpt4(message.from_user.id, model)
-            await message.answer('Ваша модель изменена...',reply_markup=kb.main_user)
+            await message.answer('Ваша модель изменена',reply_markup=kb.main_user)
         else:
-            await message.answer('У вас превышен лимит.')
+            await message.answer('У вас закончился дневной лимит, он обновится в 00:00 по МСК')
     else:
-        await message.answer('У вас нет доступа к этой модели') 
+        await message.answer(txt.free_choice_model,reply_markup=kb.tarif_inline) 
 
 
 @user.message(F.text=='DALLE')
@@ -187,11 +232,11 @@ async def change_gpt_4(message:Message):
         limit = await check_gpt_limit(message.from_user.id, model)
         if limit>0:
             await change_gpt4(message.from_user.id,model)
-            await message.answer('Ваша модель изменена...',reply_markup=kb.main_user)
+            await message.answer('Ваша модель изменена',reply_markup=kb.main_user)
         else:
-            await message.answer('У вас превышен лимит.')
+            await message.answer('У вас закончился дневной лимит, он обновится в 00:00 по МСК')
     else:
-        await message.answer('У вас нет доступа к этой модели')
+        await message.answer(txt.free_choice_model,reply_markup=kb.tarif_inline)
 
 
 
@@ -203,11 +248,11 @@ async def change_gpt_4(message:Message):
         limit = await check_gpt_limit(message.from_user.id, model)
         if limit>0:
             await change_gpt4(message.from_user.id, model)
-            await message.answer('Ваша модель изменена...',reply_markup=kb.main_user)
+            await message.answer('Ваша модель изменена',reply_markup=kb.main_user)
         else:
-            await message.answer('У вас превышен лимит.')
+            await message.answer('У вас закончился дневной лимит, он обновится в 00:00 по МСК')
     else:
-        await message.answer('У вас нет доступа к этой модели') 
+        await message.answer(txt.free_choice_model,reply_markup=kb.tarif_inline)
 
 
 @user.message(F.text == 'Проверить')
@@ -216,7 +261,7 @@ async def check(message: Message,bot: Bot):
     if status == True:
         await message.answer(txt.podpiska_activna)
     else:
-        await message.answer('Вы ne подписаны')
+        await message.answer('Вы не подписались')
 
 
 

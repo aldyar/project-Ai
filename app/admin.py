@@ -3,7 +3,10 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.filters import Filter, Command, CommandStart
 from aiogram.fsm.context import FSMContext
 import app.keyboards as kb
-from app.database.request import get_gpt_model,change_gpt4, get_today_users_count,get_total_users_count,get_all_channels,add_channel,delete_channel,get_user_plan_name
+from app.database.request import (get_gpt_model,change_gpt4, get_today_users_count,
+                                  get_total_users_count,get_all_channels,add_channel,
+                                  delete_channel,get_user_plan_name,add_advertise,
+                                  delete_advertise,get_all_advertises)
 from app.state import Chat, Image, Admins
 from app.generators import gpt_text, gpt_image,get_balance
 from aiogram.enums import ChatAction
@@ -18,7 +21,8 @@ class Admin(Filter):
     
 
 @admin.message(Admin(), CommandStart())
-async def start_admin(message: Message):
+async def start_admin(message: Message,state: FSMContext):
+    await state.clear()
     await message.answer('Hello ADMIN',reply_markup=kb.main_admin)
     
 
@@ -110,7 +114,8 @@ async def change_gpt_4(message:Message):
 
 @admin.message(Admin(),F.text=='Назад')
 @admin.message(Admin(),F.text=='Админ панель')
-async def admin_menu(message: Message):
+async def admin_menu(message: Message,state:FSMContext):
+    await state.clear()
     balance = await get_balance()
     new_users = await get_today_users_count()
     total_users = await get_total_users_count()
@@ -181,6 +186,53 @@ async def wait_delete(message:Message, state: FSMContext):
         await message.answer(f"Канал {channel_name} успешно удален.")
     except ValueError as e:
         await message.answer(str(e))
+    await state.clear()
+
+
+@admin.message(Admin(),F.text=='Управление рекламными блоками')
+async def adver_setting(message:Message):
+    await message.answer('Выберите задачу', reply_markup=kb.advert_setting)
+
+
+@admin.message(Admin(),F.text=='Добавить блок')
+async def add_advert(message: Message, state: FSMContext):
+    await message.answer('Введите текст который хотите добавить⏳')
+    await state.set_state(Admins.wait_text)
+
+
+@admin.message(Admin(),Admins.wait_text)
+async def process_advert_text(message: Message, state: FSMContext):
+    text = message.text
+    try:
+        await add_advertise(text=text)
+        await message.answer("Текст успешно добавлен в базу данных ✅")
+    except Exception as e:
+        await message.answer(f"Произошла ошибка при добавлении текста: {e} ❌")
+    await state.clear()
+
+
+@admin.message(Admin(),F.text=='Удалить блок')
+async def delete_advert(message:Message, state: FSMContext):
+    adverts = await get_all_advertises()
+    if not adverts:
+        await message.answer("Нет доступных рекламных блоков для удаления ❌")
+        return
+    advert_list = "\n".join([f"ID: `{advert.id}` — {advert.text}" for advert in adverts])
+    await message.answer(f"Отправьте ID рекламного блока, который хотите удалить:\n\n{advert_list}",parse_mode='Markdown')
+    await state.set_state(Admins.wait_advert_id)
+
+
+@admin.message(Admin(), Admins.wait_advert_id)
+async def process_advert_deletion(message: Message, state: FSMContext): 
+    advert_id = message.text.strip()
+    if not advert_id.isdigit():
+        await message.answer("Пожалуйста, введите корректный числовой ID ❌")
+        return
+    success = await delete_advertise(advert_id=int(advert_id))
+    if success:
+        await message.answer("Рекламный блок успешно удален ✅")
+    else:
+        await message.answer("Рекламный блок с таким ID не найден ❌")
     await state.clear()
 
 

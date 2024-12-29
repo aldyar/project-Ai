@@ -20,7 +20,7 @@ class User(Base):
     gpt_model: Mapped[str] = mapped_column(String, default='gpt-4o-mini')
     verification_free: Mapped[bool] = mapped_column(Boolean, default=False)
     registration_date: Mapped[date] = mapped_column(Date, default=date.today)  # Дата регистрации
-
+    advert_index = Column(Integer, default=0) 
 
 # Модель тарифа
 class Subscription(Base):
@@ -35,6 +35,7 @@ class Subscription(Base):
     gpt_4_omni_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит GPT 4o Omni
     gpt_o1_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит GPT 4o Omni
     dalle_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит DALL-E
+    
 
 
 class Channels(Base):
@@ -42,6 +43,13 @@ class Channels(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)  # ID канала
     channel_name = Column(String, nullable=False, unique=True)  # Название канала
+
+
+class Advertise(Base):
+    __tablename__ = 'adverts'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)  # Уникальный идентификатор
+    text = Column(String, nullable=False)  # Текст объявления
 
 
 # Асинхронное создание таблиц

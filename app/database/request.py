@@ -1,5 +1,5 @@
 from app.database.models import async_session
-from app.database.models import User, Subscription, Channels
+from app.database.models import User, Subscription, Channels, Advertise
 from sqlalchemy import select, func
 from datetime import datetime, date
 from aiogram import Bot
@@ -73,8 +73,24 @@ async def check_gpt_limit(session, tg_id, model):
                 return subscription.gpt_4_omni_limit
             elif model == 'o1':
                 return subscription.gpt_o1_limit
+            elif model == 'dall-e-3':
+                return subscription.dalle_limit
     return 0
 
+@connection
+async def check_all_gpt_limits(session, tg_id):
+    user = await session.scalar(select(User).where(User.tg_id == tg_id))
+    if user:
+        subscription = await session.scalar(select(Subscription).where(Subscription.id == user.subscription_id))
+        if subscription:
+            return {
+                "gpt_4_mini_limit": subscription.gpt_4_mini_limit,
+                "gpt_4_limit": subscription.gpt_4_limit,
+                "gpt_4_omni_limit": subscription.gpt_4_omni_limit,
+                "gpt_o1_limit": subscription.gpt_o1_limit,
+                "dalle_limit": subscription.dalle_limit,
+            }
+    return None  # Если пользователь или подписка не найдены
 
 @connection
 async def change_gpt4(session, tg_id,model):
@@ -152,7 +168,7 @@ async def reset_limits(session):
         update(Subscription)
         .where(Subscription.plan_name == 'start')
         .values(
-            gpt_4_mini_limit=1,
+            gpt_4_mini_limit=10000,
             gpt_4_limit=25,
             dalle_limit=30
         )
@@ -161,7 +177,7 @@ async def reset_limits(session):
         update(Subscription)
         .where(Subscription.plan_name == 'premium')
         .values(
-            gpt_4_mini_limit=1,
+            gpt_4_mini_limit=10000,
             gpt_4_omni_limit=50,
             gpt_4_limit=50,
             gpt_o1_limit=25,
@@ -280,3 +296,58 @@ async def change_subscription_by_tg_id(session, tg_id: int, new_plan: str):
             raise ValueError(f"Тариф с именем {new_plan} не найден.")
     else:
         raise ValueError(f"Пользователь с tg_id {tg_id} не найден.")
+
+
+@connection
+async def get_all_adverts(session):
+    result = await session.execute(select(Advertise.text))  # Извлекаем только поле text
+    texts = result.scalars().all()  # Преобразуем результат в список текстов
+    print("Adverts in DB:", texts)
+    return texts
+
+
+@connection
+async def get_user_advert_index(session, user_id: int):
+    result = await session.execute(
+        select(User.advert_index).where(User.tg_id == user_id)
+    )
+    index = result.scalar()
+    print(f"User {user_id} advert index:", index)
+    return index if index is not None else 0  # Если нет индекса, начинаем с 0
+
+
+@connection
+async def set_user_advert_index(session, user_id: int, index: int):
+    result = await session.execute(
+        select(User).where(User.tg_id == user_id)
+    )
+    user = result.scalar()
+    if user:
+        print(f"Updating user {user_id} advert index to {index}")
+        user.advert_index = index
+        await session.commit()
+    else: 
+        print(f"User {user_id} not found!")
+
+
+@connection
+async def add_advertise(session, text):
+    new_advert = Advertise(text=text)
+    session.add(new_advert)
+    await session.commit()
+
+
+@connection
+async def delete_advertise(session, advert_id):
+    advert = await session.scalar(select(Advertise).where(Advertise.id == advert_id))
+    if advert:
+        await session.delete(advert)
+        await session.commit()
+        return True
+    return False 
+
+
+@connection
+async def get_all_advertises(session):
+    adverts = await session.execute(select(Advertise))
+    return adverts.scalars().all()

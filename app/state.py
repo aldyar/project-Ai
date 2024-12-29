@@ -13,3 +13,5 @@ class Admins(StatesGroup):
     add_channel = State()
     delete_channel = State()
     wait_id = State()
+    wait_text = State()
+    wait_advert_id = State()
