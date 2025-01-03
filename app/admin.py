@@ -6,7 +6,8 @@ import app.keyboards as kb
 from app.database.request import (get_gpt_model,change_gpt4, get_today_users_count,
                                   get_total_users_count,get_all_channels,add_channel,
                                   delete_channel,get_user_plan_name,add_advertise,
-                                  delete_advertise,get_all_advertises)
+                                  delete_advertise,get_all_advertises,get_user_subscriptions,
+                                  delete_subscription)
 from app.state import Chat, Image, Admins
 from app.generators import gpt_text, gpt_image,get_balance
 from aiogram.enums import ChatAction
@@ -242,8 +243,38 @@ async def setting_users(message:Message,state: FSMContext):
     await state.set_state(Admins.wait_id)
 
 
-@admin.message(Admin(),Admins.wait_id)
+@admin.message(Admin(), Admins.wait_id)
 async def change_plan(message: Message, state: FSMContext):
-    user_id = message.text.strip()
-    user_plan = await get_user_plan_name(user_id)
-    await message.answer('')
+    tg_id = message.text.strip()
+    await state.update_data(tg_id=tg_id)
+    subscriptions = await get_user_subscriptions(tg_id)
+    if not subscriptions:
+        await message.answer(f"Пользователь с ID {tg_id} не найден или у него нет подписок.")
+        return
+    response = f"**ID пользователя:** {tg_id}\n\n"
+    for sub in subscriptions:
+        response += f"**Подписка:** {sub.plan_name.capitalize()}\n"
+        response += f"**Дата начала:** {sub.start_date.strftime('%d-%m-%Y')}\n"
+        if sub.end_date:
+            response += f"**Дата окончания:** {sub.end_date.strftime('%d-%m-%Y')}\n"
+        else:
+            response += f"**Дата окончания:** Не указана\n"
+        response += "\n"
+    await message.answer(response, parse_mode='Markdown',reply_markup=kb.inline_admin_user)
+
+
+@admin.callback_query(Admin(), F.data=='delete_tarif')
+async def admin_add_tarif(callback:CallbackQuery):
+    await callback.message.edit_reply_markup(reply_markup=kb.inline_admin_user_delete)
+    await callback.answer('Выберите тариф который хотите удалить',show_alert=False)
+
+
+@admin.callback_query(Admin(), F.data=='delete_mini')
+async def admin_delete_mini(callback:CallbackQuery,state:FSMContext):
+    plan_name = 'mini'
+    user_data = await state.get_data()
+    tg_id = user_data.get('tg_id')
+    await delete_subscription(tg_id,plan_name)
+    await callback.answer('Вы успешно удалили тариф',show_alert=False)
+    await callback.message.delete()
+    await state.clear()

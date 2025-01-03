@@ -27,6 +27,7 @@ class Subscription(Base):
     __tablename__ = 'subscriptions'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)  # Уникальный идентификатор подписки
+    tg_id: Mapped[int] = mapped_column(BigInteger, nullable=False)  # Telegram ID пользователя
     plan_name: Mapped[str] = mapped_column(Enum('free', 'mini', 'start', 'premium', name='plan_names'),nullable=False,default='free')
     start_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)  # Дата начала подписки
     end_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)  # Дата окончания подписки
@@ -35,7 +36,6 @@ class Subscription(Base):
     gpt_4_omni_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит GPT 4o Omni
     gpt_o1_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит GPT 4o Omni
     dalle_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит DALL-E
-    
 
 
 class Channels(Base):

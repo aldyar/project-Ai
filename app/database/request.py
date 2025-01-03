@@ -1,7 +1,7 @@
 from app.database.models import async_session
 from app.database.models import User, Subscription, Channels, Advertise
 from sqlalchemy import select, func
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from aiogram import Bot
 from aiogram.types import ChatMember
 from sqlalchemy import update
@@ -30,6 +30,7 @@ async def set_user(session, tg_id):
         gpt_4_limit=0,
         gpt_4_omni_limit=0,
         dalle_limit=0,
+        tg_id = tg_id
     )
     session.add(new_subscription)
     await session.flush()  
@@ -351,3 +352,62 @@ async def delete_advertise(session, advert_id):
 async def get_all_advertises(session):
     adverts = await session.execute(select(Advertise))
     return adverts.scalars().all()
+
+
+@connection
+async def create_subscription(session, tg_id: int, plan_name: str):
+    plan_limits = {
+        "mini": {"gpt_4_mini_limit": 100, "gpt_4_limit": 5, "dalle_limit": 10},
+        "start": {"gpt_4_mini_limit": 10000, "gpt_4_limit": 25, "dalle_limit": 30},
+        "premium": {
+            "gpt_4_mini_limit": 10000,
+            "gpt_4_limit": 50,
+            "dalle_limit": 100,
+            "gpt_4_omni_limit": 50,
+            "gpt_o1_limit": 25,
+        },
+    }
+    user = await session.scalar(select(User).where(User.tg_id == tg_id))
+    if not user:
+        raise ValueError("Пользователь с указанным Telegram ID не найден")
+    limits = plan_limits[plan_name]
+    start_date = datetime.utcnow()
+    end_date = start_date + timedelta(days=30)
+    new_subscription = Subscription(
+        plan_name=plan_name,
+        start_date=start_date,
+        end_date=end_date,
+        gpt_4_mini_limit=limits.get("gpt_4_mini_limit", 0),
+        gpt_4_limit=limits.get("gpt_4_limit", 0),
+        gpt_4_omni_limit=limits.get("gpt_4_omni_limit", 0),
+        gpt_o1_limit=limits.get("gpt_o1_limit", 0),
+        dalle_limit=limits.get("dalle_limit", 0),
+        tg_id = tg_id
+    )
+    session.add(new_subscription)
+    await session.flush()
+    user.subscription_id = new_subscription.id
+    await session.commit()
+    return new_subscription
+
+@connection
+async def get_user_subscriptions(session,tg_id: int):
+    # Выполняем запрос на получение всех подписок для указанного tg_id
+    result = await session.execute(
+        select(Subscription).filter(Subscription.tg_id == tg_id)
+    )
+    # Возвращаем все подписки пользователя
+    return result.scalars().all()
+
+
+@connection
+async def delete_subscription(session, tg_id: int, plan_name: str):
+    subscription = await session.scalar(
+        select(Subscription).where(
+            Subscription.tg_id == tg_id, Subscription.plan_name == plan_name
+        )
+    )
+    if not subscription:
+        raise ValueError(f"Подписка с именем '{plan_name}' для пользователя с ID {tg_id} не найдена.")
+    await session.delete(subscription)
+    await session.commit() 

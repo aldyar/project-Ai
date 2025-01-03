@@ -6,7 +6,7 @@ import app.text as txt
 from app.database.request import (set_user, get_gpt_model, get_user_plan_name,get_all_adverts,
                                   change_gpt4, check_gpt_limit,get_all_channels,check_all_gpt_limits,
                                   decrement_gpt_limit,check_user_subscription,reset_limits, update_free_user_limits,
-                                  set_user_advert_index,get_user_advert_index)
+                                  set_user_advert_index,get_user_advert_index, create_subscription)
 from app.generators import gpt_text, gpt_image, get_balance
 from app.state import Chat, Image
 from aiogram.fsm.context import FSMContext
@@ -71,47 +71,78 @@ async def chat_response(message: Message, state: FSMContext):
 async def generate_text(message: Message, state: FSMContext):
     model = await get_gpt_model(message.from_user.id)
     subscription = await get_user_plan_name(message.from_user.id)
-    limit = await check_gpt_limit(message.from_user.id,model)
+    limit = await check_gpt_limit(message.from_user.id, model)
+    
     if limit == 0:
         await state.clear()
         await message.answer('У вас закончился лимит', reply_markup=kb.main_user)
-    else:
-        if subscription == 'free':
-            limit = await check_gpt_limit(message.from_user.id, model)
-            if limit > 0: 
-                await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.TYPING)
-                await state.set_state(Chat.wait)
-                adverts = await get_all_adverts()
-                current_index = await get_user_advert_index(message.from_user.id)
-                next_index = (current_index + 1) % len(adverts)
-                next_advert = adverts[next_index]
-                await set_user_advert_index(message.from_user.id, next_index)
-                response = await gpt_text(message.text, model)
-                await decrement_gpt_limit(message.from_user.id, model)
-                await message.answer(response, parse_mode='Markdown')
-                await message.answer(f"_Реклама_\n\n  {next_advert}", parse_mode='Markdown',reply_markup=kb.off_advert)
-                await state.set_state(Chat.text)
-            else:
-                await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
-                await state.clear()
-        elif subscription in ["premium", "start"] and model == "gpt-4o-mini":
+        return
+
+    # Получаем историю из состояния
+    data = await state.get_data()
+    history = data.get('history', [])
+    history.append({"role": "user", "content": message.text})
+    history = history[-20:]  # Оставляем только последние 20 сообщений
+
+    if subscription == 'free':
+        if limit > 0: 
             await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.TYPING)
             await state.set_state(Chat.wait)
-            response = await gpt_text(message.text, model)
+            
+            # Работа с рекламой
+            adverts = await get_all_adverts()
+            current_index = await get_user_advert_index(message.from_user.id)
+            next_index = (current_index + 1) % len(adverts)
+            next_advert = adverts[next_index]
+            await set_user_advert_index(message.from_user.id, next_index)
+
+            # GPT-ответ
+            response = await gpt_text(history, model)
+            await decrement_gpt_limit(message.from_user.id, model)
+            
+            # Обновляем историю
+            history.append({"role": "assistant", "content": response})
+            await state.update_data(history=history)
+
+            await message.answer(response, parse_mode='Markdown')
+            await message.answer(f"_Реклама_\n\n  {next_advert.text}", parse_mode='Markdown', reply_markup=kb.off_advert)
+            await state.set_state(Chat.text)
+        else:
+            await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
+            await state.clear()
+
+    elif subscription in ["premium", "start"] and model == "gpt-4o-mini":
+        await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.TYPING)
+        await state.set_state(Chat.wait)
+        
+        # GPT-ответ
+        response = await gpt_text(history, model)
+
+        # Обновляем историю
+        history.append({"role": "assistant", "content": response})
+        await state.update_data(history=history)
+
+        await message.answer(response, parse_mode='Markdown')
+        await state.set_state(Chat.text)
+
+    else:
+        if limit > 0: 
+            await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.TYPING)
+            await state.set_state(Chat.wait)
+
+            # GPT-ответ
+            response = await gpt_text(history, model)
+            await decrement_gpt_limit(message.from_user.id, model)
+
+            # Обновляем историю
+            history.append({"role": "assistant", "content": response})
+            await state.update_data(history=history)
+
             await message.answer(response, parse_mode='Markdown')
             await state.set_state(Chat.text)
         else:
-            limit = await check_gpt_limit(message.from_user.id, model)
-            if limit > 0: 
-                await message.bot.send_chat_action(chat_id=message.from_user.id, action=ChatAction.TYPING)
-                await state.set_state(Chat.wait)
-                response = await gpt_text(message.text, model)
-                await decrement_gpt_limit(message.from_user.id, model)
-                await message.answer(response, parse_mode='Markdown')
-                await state.set_state(Chat.text)
-            else:
-                await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
-                await state.clear()
+            await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
+            await state.clear()
 
 
 @user.message(Image.wait)
@@ -264,7 +295,28 @@ async def check(message: Message,bot: Bot):
         await message.answer('Вы не подписались')
 
 
+@user.callback_query(F.data == 'buy_mini')
+async def buy_mini(callback: CallbackQuery):
+    plan_name = 'mini'
+    await create_subscription(callback.from_user.id, plan_name)
+    await callback.answer('Вы успешно приобрели тариф')
+    await callback.message.edit_text('Вы успешно приобрели тариф', reply_markup=None)
 
+
+@user.callback_query(F.data == 'buy_start')
+async def buy_mini(callback: CallbackQuery):
+    plan_name = 'start'
+    await create_subscription(callback.from_user.id, plan_name)
+    await callback.answer('Вы успешно приобрели тариф')
+    await callback.message.edit_text('Вы успешно приобрели тариф', reply_markup=None)
+
+
+@user.callback_query(F.data == 'buy_premium')
+async def buy_mini(callback: CallbackQuery):
+    plan_name = 'premium'
+    await create_subscription(callback.from_user.id, plan_name)
+    await callback.answer('Вы успешно приобрели тариф')
+    await callback.message.edit_text('Вы успешно приобрели тариф', reply_markup=None)
 
 
 

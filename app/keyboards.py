@@ -27,9 +27,9 @@ support_inline = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 tarify_inline = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text='Mini', url='https://t.me/it_razrabotka_it')],
-    [InlineKeyboardButton(text='Start', url='https://t.me/it_razrabotka_it')],
-    [InlineKeyboardButton(text='Premium', url='https://t.me/it_razrabotka_it')],
+    [InlineKeyboardButton(text='Mini', callback_data='buy_mini')],
+    [InlineKeyboardButton(text='Start', callback_data='buy_start')],
+    [InlineKeyboardButton(text='Premium', callback_data='buy_premium')],
 ])
 
 check_channels  = ReplyKeyboardMarkup(keyboard=[
@@ -97,3 +97,20 @@ advert_setting = ReplyKeyboardMarkup(keyboard=[
      KeyboardButton(text='Удалить блок')],
      [KeyboardButton(text = 'Назад')]
 ],resize_keyboard=True)
+
+inline_admin_user = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text='Добавить тариф', callback_data='add_tarif')],
+    [InlineKeyboardButton(text='Удалить тариф',callback_data='delete_tarif')]
+])
+
+inline_admin_user_add = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text='Mini', callback_data='tarif')],
+    [InlineKeyboardButton(text='Start',callback_data='tarif')],
+    [InlineKeyboardButton(text='Premium')]
+])
+
+inline_admin_user_delete = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text='Mini', callback_data='delete_mini')],
+    [InlineKeyboardButton(text='Start',callback_data='tarif')],
+    [InlineKeyboardButton(text='Premium',callback_data='tarif')]
+])

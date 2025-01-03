@@ -9,7 +9,7 @@ client = AsyncOpenAI(api_key=AITOKEN,base_url=AI_BASE_URL)
 async def gpt_text(prompt, model):
     completion = await client.chat.completions.create(
       model = model,
-      messages=[{"role": "user", "content": prompt}],
+      messages=prompt,
     )
     return completion.choices[0].message.content
 

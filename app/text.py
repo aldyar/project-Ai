@@ -79,3 +79,4 @@ def change_model(plan,limits):
         f"🔹 GPT-o1-Preview: <b>{limits['gpt_o1_limit']}</b>\n\n"
         "💡 Выберите модель для продолжения."
     )
+
