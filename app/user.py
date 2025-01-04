@@ -159,15 +159,11 @@ async def wait_wait(message:Message):
 async def models(message: Message):
     plan = await get_user_plan_name(message.from_user.id)
     limits = await check_all_gpt_limits(message.from_user.id)
-    await message.answer(txt.change_model(plan,limits), reply_markup=kb.models_user, parse_mode="HTML")
+    await message.answer(txt.change_model(plan,limits), reply_markup=kb.models_user, parse_mode="Markdown")
 
 
 @user.message(F.text=='Поддержка')
 async def support(message:Message):
-    adverts = await get_all_adverts()  # Получаем только тексты объявлений
-    if adverts:  # Если объявления существуют
-        text = "\n\n".join(adverts)
-    await message.answer(text)
     await message.answer(txt.support_text, reply_markup=kb.support_inline)
 
 

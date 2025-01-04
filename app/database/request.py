@@ -16,7 +16,27 @@ def connection(func):
         async with async_session() as session:
             return await func(session, *args, **kwargs)
     return inner
-    
+
+
+@connection
+async def set_admin(session, tg_id):
+    user = await session.scalar(select(User).where(User.tg_id == tg_id))
+    if user:
+        return 
+    new_subscription = Subscription(
+        plan_name='premium',  
+        start_date=datetime.utcnow(),
+        gpt_4_mini_limit=10000,
+        gpt_4_limit=10000,
+        gpt_4_omni_limit=10000,
+        dalle_limit=10000,
+        tg_id = tg_id
+    )
+    session.add(new_subscription)
+    await session.flush()  
+    new_user = User(tg_id=tg_id, subscription_id=new_subscription.id)
+    session.add(new_user)
+    await session.commit()  
 
 @connection
 async def set_user(session, tg_id):
@@ -72,7 +92,7 @@ async def check_gpt_limit(session, tg_id, model):
                 return subscription.gpt_4_limit
             elif model == 'gpt-4o':
                 return subscription.gpt_4_omni_limit
-            elif model == 'o1':
+            elif model == 'o1-mini':
                 return subscription.gpt_o1_limit
             elif model == 'dall-e-3':
                 return subscription.dalle_limit

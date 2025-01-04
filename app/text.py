@@ -68,15 +68,16 @@ free_choice_model =(
     'У вас нет доступа к этой модели. Вы можете оформить месячный тариф, чтобы разблокировать её возможности и пользоваться всеми функциями'
 )
 
-def change_model(plan,limits):
+def change_model(plan, limits):
+    gpt_4_mini_limit = "♾️" if plan.lower() in ["premium", "start"] else limits['gpt_4_mini_limit']
     return (
-        f"💎 Ваш тариф: <b>{plan.capitalize()}</b>\n\n"
-        "📊 <u>Доступные лимиты:</u>\n"
-        f"🔹 GPT 4o Mini: <b>{limits['gpt_4_mini_limit']}</b>\n"
-        f"🔹 GPT 4: <b>{limits['gpt_4_limit']}</b>\n"
-        f"🔹 GPT 4o Omni: <b>{limits['gpt_4_omni_limit']}</b>\n"
-        f"🔹 DALL-E: <b>{limits['dalle_limit']}</b>\n"
-        f"🔹 GPT-o1-Preview: <b>{limits['gpt_o1_limit']}</b>\n\n"
+        f"💎 Ваш тариф: *{plan.capitalize()}*\n\n"
+        "📊 _Доступные лимиты:_\n"
+        f"🔹 GPT 4o Mini: *{gpt_4_mini_limit}*\n"
+        f"🔹 GPT 4: *{limits['gpt_4_limit']}*\n"
+        f"🔹 GPT 4o Omni: *{limits['gpt_4_omni_limit']}*\n"
+        f"🔹 DALL-E: *{limits['dalle_limit']}*\n"
+        f"🔹 GPT-o1-Preview: *{limits['gpt_o1_limit']}*\n\n"
         "💡 Выберите модель для продолжения."
     )
 

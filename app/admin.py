@@ -7,7 +7,7 @@ from app.database.request import (get_gpt_model,change_gpt4, get_today_users_cou
                                   get_total_users_count,get_all_channels,add_channel,
                                   delete_channel,get_user_plan_name,add_advertise,
                                   delete_advertise,get_all_advertises,get_user_subscriptions,
-                                  delete_subscription)
+                                  delete_subscription, set_admin)
 from app.state import Chat, Image, Admins
 from app.generators import gpt_text, gpt_image,get_balance
 from aiogram.enums import ChatAction
@@ -24,6 +24,7 @@ class Admin(Filter):
 @admin.message(Admin(), CommandStart())
 async def start_admin(message: Message,state: FSMContext):
     await state.clear()
+    await set_admin(message.from_user.id)
     await message.answer('Hello ADMIN',reply_markup=kb.main_admin)
     
 
@@ -36,7 +37,6 @@ async def chatting(message: Message, state: FSMContext):
     else:
         await state.set_state(Chat.text)
         await message.answer('Введите ваш запрос',reply_markup=kb.chat_exit)
-    await message.answer('rabotaet')
 
 
 @admin.message(Admin(),Image.wait)
