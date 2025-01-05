@@ -1,6 +1,6 @@
 from app.database.models import async_session
 from app.database.models import User, Subscription, Channels, Advertise
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from datetime import datetime, date, timedelta
 from aiogram import Bot
 from aiogram.types import ChatMember
@@ -245,6 +245,13 @@ def schedule_daily_task(scheduler):
         minute=0, 
         timezone="Europe/Moscow"  # Указываем часовой пояс
     )
+    scheduler.add_job(
+        remove_expired_subscriptions, 
+        "cron", 
+        hour=1, 
+        minute=0, 
+        timezone="Europe/Moscow"
+    )
 
 
 @connection
@@ -321,10 +328,10 @@ async def change_subscription_by_tg_id(session, tg_id: int, new_plan: str):
 
 @connection
 async def get_all_adverts(session):
-    result = await session.execute(select(Advertise.text))  # Извлекаем только поле text
-    texts = result.scalars().all()  # Преобразуем результат в список текстов
-    print("Adverts in DB:", texts)
-    return texts
+    result = await session.execute(select(Advertise.text, Advertise.url))  # Извлекаем текст и ссылку
+    adverts = result.all()  # Получаем список кортежей (text, url)
+    return [{"text": advert.text, "url": advert.url} for advert in adverts]  # Преобразуем в список словарей
+
 
 
 @connection
@@ -352,8 +359,8 @@ async def set_user_advert_index(session, user_id: int, index: int):
 
 
 @connection
-async def add_advertise(session, text):
-    new_advert = Advertise(text=text)
+async def add_advertise(session, text: str, url: str):
+    new_advert = Advertise(text=text, url=url)
     session.add(new_advert)
     await session.commit()
 
@@ -431,3 +438,38 @@ async def delete_subscription(session, tg_id: int, plan_name: str):
         raise ValueError(f"Подписка с именем '{plan_name}' для пользователя с ID {tg_id} не найдена.")
     await session.delete(subscription)
     await session.commit() 
+
+
+@connection
+async def remove_expired_subscriptions(session):
+    """
+    Удаляет подписки с истекшим сроком действия.
+    """
+    await session.execute(
+        delete(Subscription)
+        .where(
+            Subscription.end_date.isnot(None),
+            Subscription.end_date < datetime.utcnow()
+        )
+    )
+    await session.commit()
+    print("Удалены подписки с истекшим сроком действия.")
+
+
+@connection
+async def update_user_subscription(session, tg_id: int, new_plan: str):
+    subscription = await session.execute(
+        select(Subscription).filter(Subscription.plan_name == new_plan)
+    )
+    subscription = subscription.scalars().first()
+    if not subscription:
+        return f"Подписка с названием '{new_plan}' не найдена."
+    user = await session.execute(
+        select(User).filter(User.tg_id == tg_id)
+    )
+    user = user.scalars().first()
+    if not user:
+        return f"Пользователь с tg_id {tg_id} не найден."
+    user.subscription_id = subscription.id
+    await session.commit()
+    return f"Подписка пользователя успешно обновлена на '{new_plan}'."

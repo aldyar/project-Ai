@@ -104,13 +104,24 @@ inline_admin_user = InlineKeyboardMarkup(inline_keyboard=[
 ])
 
 inline_admin_user_add = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text='Mini', callback_data='tarif')],
-    [InlineKeyboardButton(text='Start',callback_data='tarif')],
-    [InlineKeyboardButton(text='Premium')]
+    [InlineKeyboardButton(text='Mini', callback_data='add_mini')],
+    [InlineKeyboardButton(text='Start',callback_data='add_start')],
+    [InlineKeyboardButton(text='Premium',callback_data='add_premium')]
 ])
 
 inline_admin_user_delete = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(text='Mini', callback_data='delete_mini')],
-    [InlineKeyboardButton(text='Start',callback_data='tarif')],
-    [InlineKeyboardButton(text='Premium',callback_data='tarif')]
+    [InlineKeyboardButton(text='Start',callback_data='delete_start')],
+    [InlineKeyboardButton(text='Premium',callback_data='delete_premium')]
+])
+
+inline_user_switch = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text = 'Сменить тариф',callback_data= 'switch')]
+])
+
+inline_user_switch2 = InlineKeyboardMarkup(inline_keyboard=[
+    [InlineKeyboardButton(text = 'Free',callback_data= 'switch_free')],
+    [InlineKeyboardButton(text='Mini', callback_data='switch_mini')],
+    [InlineKeyboardButton(text='Start',callback_data='switch_start')],
+    [InlineKeyboardButton(text='Premium',callback_data='switch_premium')]
 ])

@@ -7,7 +7,7 @@ from app.database.request import (get_gpt_model,change_gpt4, get_today_users_cou
                                   get_total_users_count,get_all_channels,add_channel,
                                   delete_channel,get_user_plan_name,add_advertise,
                                   delete_advertise,get_all_advertises,get_user_subscriptions,
-                                  delete_subscription, set_admin)
+                                  delete_subscription, set_admin, create_subscription)
 from app.state import Chat, Image, Admins
 from app.generators import gpt_text, gpt_image,get_balance
 from aiogram.enums import ChatAction
@@ -201,15 +201,28 @@ async def add_advert(message: Message, state: FSMContext):
     await state.set_state(Admins.wait_text)
 
 
-@admin.message(Admin(),Admins.wait_text)
+@admin.message(Admin(), Admins.wait_text)
 async def process_advert_text(message: Message, state: FSMContext):
     text = message.text
+    await state.update_data(advert_text=text)  # Сохраняем текст в состояние
+    await message.answer("Введите ссылку для этого объявления ⏳")
+    await state.set_state(Admins.wait_url)
+
+
+@admin.message(Admin(), Admins.wait_url)
+async def process_advert_url(message: Message, state: FSMContext):
+    url = message.text
+    data = await state.get_data()  # Получаем сохраненный текст
+    advert_text = data.get("advert_text")
+    
     try:
-        await add_advertise(text=text)
-        await message.answer("Текст успешно добавлен в базу данных ✅")
+        # Добавляем в базу данных текст и ссылку
+        await add_advertise(text=advert_text, url=url)
+        await message.answer("Объявление успешно добавлено в базу данных ✅")
     except Exception as e:
-        await message.answer(f"Произошла ошибка при добавлении текста: {e} ❌")
-    await state.clear()
+        await message.answer(f"Произошла ошибка при добавлении объявления: {e} ❌")
+    
+    await state.clear()  # Очищаем состояние
 
 
 @admin.message(Admin(),F.text=='Удалить блок')
@@ -261,12 +274,19 @@ async def change_plan(message: Message, state: FSMContext):
             response += f"**Дата окончания:** Не указана\n"
         response += "\n"
     await message.answer(response, parse_mode='Markdown',reply_markup=kb.inline_admin_user)
+    
 
 
 @admin.callback_query(Admin(), F.data=='delete_tarif')
 async def admin_add_tarif(callback:CallbackQuery):
     await callback.message.edit_reply_markup(reply_markup=kb.inline_admin_user_delete)
     await callback.answer('Выберите тариф который хотите удалить',show_alert=False)
+
+
+@admin.callback_query(Admin(), F.data=='add_tarif')
+async def admin_add_tarif(callback:CallbackQuery):
+    await callback.message.edit_reply_markup(reply_markup=kb.inline_admin_user_add)
+    await callback.answer('Выберите тариф который хотите добавить',show_alert=False)
 
 
 @admin.callback_query(Admin(), F.data=='delete_mini')
@@ -276,5 +296,60 @@ async def admin_delete_mini(callback:CallbackQuery,state:FSMContext):
     tg_id = user_data.get('tg_id')
     await delete_subscription(tg_id,plan_name)
     await callback.answer('Вы успешно удалили тариф',show_alert=False)
+    await callback.message.delete()
+    await state.clear()
+
+
+@admin.callback_query(Admin(), F.data=='delete_start')
+async def admin_delete_mini(callback:CallbackQuery,state:FSMContext):
+    plan_name = 'start'
+    user_data = await state.get_data()
+    tg_id = user_data.get('tg_id')
+    await delete_subscription(tg_id,plan_name)
+    await callback.answer('Вы успешно удалили тариф',show_alert=False)
+    await callback.message.delete()
+    await state.clear()
+
+
+@admin.callback_query(Admin(), F.data=='delete_premium')
+async def admin_delete_mini(callback:CallbackQuery,state:FSMContext):
+    plan_name = 'premium'
+    user_data = await state.get_data()
+    tg_id = user_data.get('tg_id')
+    await delete_subscription(tg_id,plan_name)
+    await callback.answer('Вы успешно удалили тариф',show_alert=False)
+    await callback.message.delete()
+    await state.clear()
+
+
+@admin.callback_query(Admin(), F.data=='add_mini')
+async def admin_delete_mini(callback:CallbackQuery,state:FSMContext):
+    plan_name = 'mini'
+    user_data = await state.get_data()
+    tg_id = user_data.get('tg_id')
+    await create_subscription(tg_id,plan_name)
+    await callback.answer('Вы успешно добавили тариф',show_alert=False)
+    await callback.message.delete()
+    await state.clear()
+
+
+@admin.callback_query(Admin(), F.data=='add_start')
+async def admin_delete_mini(callback:CallbackQuery,state:FSMContext):
+    plan_name = 'start'
+    user_data = await state.get_data()
+    tg_id = user_data.get('tg_id')
+    await create_subscription(tg_id,plan_name)
+    await callback.answer('Вы успешно добавили тариф',show_alert=False)
+    await callback.message.delete()
+    await state.clear()
+
+
+@admin.callback_query(Admin(), F.data=='add_premium')
+async def admin_delete_mini(callback:CallbackQuery,state:FSMContext):
+    plan_name = 'premium'
+    user_data = await state.get_data()
+    tg_id = user_data.get('tg_id')
+    await create_subscription(tg_id,plan_name)
+    await callback.answer('Вы успешно добавили тариф',show_alert=False)
     await callback.message.delete()
     await state.clear()

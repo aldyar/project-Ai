@@ -15,3 +15,4 @@ class Admins(StatesGroup):
     wait_id = State()
     wait_text = State()
     wait_advert_id = State()
+    wait_url = State()

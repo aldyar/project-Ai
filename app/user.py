@@ -6,7 +6,8 @@ import app.text as txt
 from app.database.request import (set_user, get_gpt_model, get_user_plan_name,get_all_adverts,
                                   change_gpt4, check_gpt_limit,get_all_channels,check_all_gpt_limits,
                                   decrement_gpt_limit,check_user_subscription,reset_limits, update_free_user_limits,
-                                  set_user_advert_index,get_user_advert_index, create_subscription)
+                                  set_user_advert_index,get_user_advert_index, create_subscription, get_user_subscriptions,
+                                  update_user_subscription)
 from app.generators import gpt_text, gpt_image, get_balance
 from app.state import Chat, Image
 from aiogram.fsm.context import FSMContext
@@ -104,8 +105,10 @@ async def generate_text(message: Message, state: FSMContext):
             history.append({"role": "assistant", "content": response})
             await state.update_data(history=history)
 
+            advert_text = f"[{next_advert['text']}]({next_advert['url']})"
+
             await message.answer(response, parse_mode='Markdown')
-            await message.answer(f"_Реклама_\n\n  {next_advert.text}", parse_mode='Markdown', reply_markup=kb.off_advert)
+            await message.answer(f"_Реклама_\n\n{advert_text}", parse_mode='Markdown',disable_web_page_preview=True, reply_markup=kb.off_advert)
             await state.set_state(Chat.text)
         else:
             await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
@@ -195,14 +198,64 @@ async def user_profile(message: Message):
             f"— Ваш ID: {user_id}\n"
             f"— Тарифный план не найден. Пожалуйста, зарегистрируйтесь или обратитесь в поддержку."
         )
-    await message.answer(response_text,parse_mode='Markdown')
+    await message.answer(response_text,parse_mode='Markdown',reply_markup=kb.inline_user_switch)
+
+@user.callback_query(F.data == 'switch')
+async def switch_user(callback: CallbackQuery):
+    subscriptions = await get_user_subscriptions(callback.from_user.id)
+    # Проверяем наличие платных подписок
+    paid_subscriptions = [sub for sub in subscriptions if sub.plan_name.lower() in ['mini', 'start', 'premium']]
+
+    if not paid_subscriptions:
+        # Если нет платных подписок
+        await callback.answer('У вас нет платной подписки.', show_alert=True)
+        return
+
+    # Если есть хотя бы одна платная подписка
+    response = f"**ID пользователя:** {callback.from_user.id}\n\n"
+    for sub in subscriptions:
+        response += f"**Подписка:** {sub.plan_name.capitalize()}\n"
+        response += f"**Дата начала:** {sub.start_date.strftime('%d-%m-%Y')}\n"
+        if sub.end_date:
+            response += f"**Дата окончания:** {sub.end_date.strftime('%d-%m-%Y')}\n"
+        else:
+            response += f"**Дата окончания:** Не указана\n"
+        response += "\n"
+
+    # Отправляем сообщение с клавиатурой inline_user_switch2
+    await callback.message.answer(response, parse_mode='Markdown', reply_markup=kb.inline_user_switch2)
+    await callback.answer()
+
+
+@user.callback_query(F.data.startswith('switch_'))
+async def switch_plan(callback: CallbackQuery):
+    new_plan = callback.data.split('_')[1]  # Получаем название нового тарифа из callback_data
+    subscriptions = await get_user_subscriptions(callback.from_user.id)
+
+    # Проверяем доступные пользователю подписки
+    available_subscriptions = {sub.plan_name.lower() for sub in subscriptions}
+
+    if new_plan not in available_subscriptions:
+        # Если выбранного тарифа нет у пользователя
+        await callback.answer(f'У вас нет доступа к тарифу "{new_plan.capitalize()}".', show_alert=True)
+        return
+
+    # Меняем тариф пользователя
+    await update_user_subscription(callback.from_user.id, new_plan)
+    await callback.answer(f'Ваш тариф успешно изменён на "{new_plan.capitalize()}".', show_alert=True)
+
+    # Отправляем подтверждение пользователю
+    await callback.message.edit_text(
+        f'Ваш тариф был обновлён на "{new_plan.capitalize()}".',
+        reply_markup=None
+    )
 
 
 @user.message(F.text == 'GPT 4o mini')
 async def change_gpt_4(message: Message):
     model = 'gpt-4o-mini'
     subscription = await get_user_plan_name(message.from_user.id)
-    if subscription == "premium":
+    if subscription in ['start', 'premium']:
         await change_gpt4(message.from_user.id, model)
         await message.answer('Ваша модель изменена', reply_markup=kb.main_user)
     elif subscription =='mini':

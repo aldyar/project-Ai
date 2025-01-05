@@ -50,6 +50,7 @@ class Advertise(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)  # Уникальный идентификатор
     text = Column(String, nullable=False)  # Текст объявления
+    url = Column(String, nullable=False)  # Ссылка на объявление
 
 
 # Асинхронное создание таблиц
