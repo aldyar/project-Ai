@@ -36,8 +36,8 @@ class Subscription(Base):
     gpt_4_omni_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит GPT 4o Omni
     gpt_o1_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит GPT 4o Omni
     dalle_limit: Mapped[int] = mapped_column(Integer, default=0)  # Лимит DALL-E
-
-
+    last_limit_reset: Mapped[datetime] = mapped_column(DateTime, nullable=True) 
+    
 class Channels(Base):
     __tablename__ = 'channels'
 

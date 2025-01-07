@@ -7,7 +7,7 @@ from app.database.request import (set_user, get_gpt_model, get_user_plan_name,ge
                                   change_gpt4, check_gpt_limit,get_all_channels,check_all_gpt_limits,
                                   decrement_gpt_limit,check_user_subscription,reset_limits, update_free_user_limits,
                                   set_user_advert_index,get_user_advert_index, create_subscription, get_user_subscriptions,
-                                  update_user_subscription)
+                                  update_user_subscription, update_last_limit_reset, add_gpt4_mini_limit)
 from app.generators import gpt_text, gpt_image, get_balance
 from app.state import Chat, Image
 from aiogram.fsm.context import FSMContext
@@ -74,11 +74,6 @@ async def generate_text(message: Message, state: FSMContext):
     subscription = await get_user_plan_name(message.from_user.id)
     limit = await check_gpt_limit(message.from_user.id, model)
     
-    if limit == 0:
-        await state.clear()
-        await message.answer('У вас закончился лимит', reply_markup=kb.main_user)
-        return
-
     # Получаем историю из состояния
     data = await state.get_data()
     history = data.get('history', [])
@@ -112,6 +107,7 @@ async def generate_text(message: Message, state: FSMContext):
             await state.set_state(Chat.text)
         else:
             await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
+            await update_last_limit_reset(message.from_user.id)
             await state.clear()
 
     elif subscription in ["premium", "start"] and model == "gpt-4o-mini":
@@ -339,33 +335,37 @@ async def change_gpt_4(message:Message):
 async def check(message: Message,bot: Bot):
     status = await check_user_subscription(bot, message.from_user.id )
     if status == True:
-        await message.answer(txt.podpiska_activna)
+        await message.answer(txt.podpiska_activna,reply_markup=kb.main_user)
+        await add_gpt4_mini_limit(message.from_user.id)
     else:
         await message.answer('Вы не подписались')
 
 
 @user.callback_query(F.data == 'buy_mini')
 async def buy_mini(callback: CallbackQuery):
-    plan_name = 'mini'
-    await create_subscription(callback.from_user.id, plan_name)
-    await callback.answer('Вы успешно приобрели тариф')
-    await callback.message.edit_text('Вы успешно приобрели тариф', reply_markup=None)
+    await callback.answer("Тариф в разработке", show_alert=True)
+    #plan_name = 'mini'
+    #await create_subscription(callback.from_user.id, plan_name)
+    #await callback.answer('Вы успешно приобрели тариф')
+    #await callback.message.edit_text('Вы успешно приобрели тариф', reply_markup=None)
 
 
 @user.callback_query(F.data == 'buy_start')
 async def buy_mini(callback: CallbackQuery):
-    plan_name = 'start'
-    await create_subscription(callback.from_user.id, plan_name)
-    await callback.answer('Вы успешно приобрели тариф')
-    await callback.message.edit_text('Вы успешно приобрели тариф', reply_markup=None)
+    await callback.answer("Тариф в разработке", show_alert=True)
+    #plan_name = 'start'
+    #await create_subscription(callback.from_user.id, plan_name)
+    #await callback.answer('Вы успешно приобрели тариф')
+    #await callback.message.edit_text('Вы успешно приобрели тариф', reply_markup=None)
 
 
 @user.callback_query(F.data == 'buy_premium')
 async def buy_mini(callback: CallbackQuery):
-    plan_name = 'premium'
-    await create_subscription(callback.from_user.id, plan_name)
-    await callback.answer('Вы успешно приобрели тариф')
-    await callback.message.edit_text('Вы успешно приобрели тариф', reply_markup=None)
+    await callback.answer("Тариф в разработке", show_alert=True)
+    #plan_name = 'premium'
+    #await create_subscription(callback.from_user.id, plan_name)
+    #await callback.answer('Вы успешно приобрели тариф')
+    #await callback.message.edit_text('Вы успешно приобрели тариф', reply_markup=None)
 
 
 

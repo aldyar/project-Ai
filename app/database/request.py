@@ -209,7 +209,7 @@ async def reset_limits(session):
     print('Все окей')
 
 
-@connection
+"""@connection
 async def update_free_user_limits(session):
     free_users = await session.execute(
         select(User).join(Subscription, User.subscription_id == Subscription.id)
@@ -225,8 +225,43 @@ async def update_free_user_limits(session):
             .values(gpt_4_mini_limit=new_limit)
         )
     await session.commit()
+    print("Лимиты для пользователей с подпиской 'free' успешно обновлены.")"""
+
+
+@connection
+async def update_free_user_limits(session):
+    # Получаем всех пользователей с подпиской 'free'
+    free_users = await session.execute(
+        select(User).join(Subscription, User.subscription_id == Subscription.id)
+        .where(Subscription.plan_name == 'free')
+    )
+    users_to_update = free_users.scalars().all()
+    now = datetime.utcnow()
+
+    for user in users_to_update:
+        subscription = await session.get(Subscription, user.subscription_id)
+
+        # Проверяем, истекли ли 24 часа с момента последнего обновления
+        if (now - subscription.last_limit_reset).total_seconds() >= 86400:  # 86400 секунд = 24 часа
+            new_limit = 10 if user.verification_free else 5
+            subscription.gpt_4_mini_limit = new_limit
+            subscription.last_limit_reset = None  # Обновляем время последнего сброса
+
+    await session.commit()
     print("Лимиты для пользователей с подпиской 'free' успешно обновлены.")
 
+
+@connection
+async def update_last_limit_reset(session, tg_id):
+    # Получаем пользователя по tg_id
+    user = await session.scalar(select(User).where(User.tg_id == tg_id))
+    if user:
+        # Получаем подписку пользователя
+        subscription = await session.get(Subscription, user.subscription_id)
+        if subscription:
+            # Обновляем дату последнего сброса лимита на текущую
+            subscription.last_limit_reset = datetime.utcnow()
+            await session.commit()
 
 
 def schedule_daily_task(scheduler):
@@ -239,12 +274,11 @@ def schedule_daily_task(scheduler):
     )
         # Добавляем задачу для update_free_user_limits
     scheduler.add_job(
-        update_free_user_limits,  # Используем лямбда-функцию для передачи bot
-        "cron", 
-        hour=0,  # Пример времени
-        minute=0, 
-        timezone="Europe/Moscow"  # Указываем часовой пояс
-    )
+    update_free_user_limits,  # Функция для обновления лимитов
+    "interval",  # Устанавливаем интервал
+    hours=1,  # Интервал в 1 час
+    timezone="Europe/Moscow"  # Указываем часовой пояс
+)
     scheduler.add_job(
         remove_expired_subscriptions, 
         "cron", 
@@ -473,3 +507,15 @@ async def update_user_subscription(session, tg_id: int, new_plan: str):
     user.subscription_id = subscription.id
     await session.commit()
     return f"Подписка пользователя успешно обновлена на '{new_plan}'."
+
+
+@connection
+async def add_gpt4_mini_limit(session, tg_id: int):
+    # Обновляем лимит через связь User -> Subscription
+    update_stmt = (
+        update(Subscription)
+        .where(Subscription.id == select(User.subscription_id).where(User.tg_id == tg_id))
+        .values(gpt_4_mini_limit=Subscription.gpt_4_mini_limit + 5)
+    )
+    result = await session.execute(update_stmt)
+    await session.commit()
