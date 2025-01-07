@@ -7,7 +7,7 @@ from app.database.request import (set_user, get_gpt_model, get_user_plan_name,ge
                                   change_gpt4, check_gpt_limit,get_all_channels,check_all_gpt_limits,
                                   decrement_gpt_limit,check_user_subscription,reset_limits, update_free_user_limits,
                                   set_user_advert_index,get_user_advert_index, create_subscription, get_user_subscriptions,
-                                  update_user_subscription, update_last_limit_reset, add_gpt4_mini_limit)
+                                  update_user_subscription, update_last_limit_reset, add_gpt4_mini_limit,get_last_limit_reset)
 from app.generators import gpt_text, gpt_image, get_balance
 from app.state import Chat, Image
 from aiogram.fsm.context import FSMContext
@@ -87,10 +87,12 @@ async def generate_text(message: Message, state: FSMContext):
             
             # Работа с рекламой
             adverts = await get_all_adverts()
-            current_index = await get_user_advert_index(message.from_user.id)
-            next_index = (current_index + 1) % len(adverts)
-            next_advert = adverts[next_index]
-            await set_user_advert_index(message.from_user.id, next_index)
+            next_advert = None
+            if adverts:  # Если есть реклама
+                current_index = await get_user_advert_index(message.from_user.id)
+                next_index = (current_index + 1) % len(adverts)
+                next_advert = adverts[next_index]
+                await set_user_advert_index(message.from_user.id, next_index)
 
             # GPT-ответ
             response = await gpt_text(history, model)
@@ -100,14 +102,16 @@ async def generate_text(message: Message, state: FSMContext):
             history.append({"role": "assistant", "content": response})
             await state.update_data(history=history)
 
-            advert_text = f"[{next_advert['text']}]({next_advert['url']})"
-
             await message.answer(response, parse_mode='Markdown')
-            await message.answer(f"_Реклама_\n\n{advert_text}", parse_mode='Markdown',disable_web_page_preview=True, reply_markup=kb.off_advert)
+            if next_advert:
+                advert_text = f"[{next_advert['text']}]({next_advert['url']})"
+                await message.answer(f"_Реклама_\n\n{advert_text}", parse_mode='Markdown',disable_web_page_preview=True, reply_markup=kb.off_advert)
             await state.set_state(Chat.text)
         else:
-            await message.answer('У вас закончился лимит..', reply_markup=kb.main_user)
-            await update_last_limit_reset(message.from_user.id)
+            last_limit_reset = await get_last_limit_reset(message.from_user.id)
+            if last_limit_reset is None:
+                await update_last_limit_reset(message.from_user.id)
+            await message.answer('У вас закончился лимит..', reply_markup=kb.main_user) 
             await state.clear()
 
     elif subscription in ["premium", "start"] and model == "gpt-4o-mini":

@@ -241,6 +241,8 @@ async def update_free_user_limits(session):
     for user in users_to_update:
         subscription = await session.get(Subscription, user.subscription_id)
 
+        if subscription.last_limit_reset is None:
+            continue
         # Проверяем, истекли ли 24 часа с момента последнего обновления
         if (now - subscription.last_limit_reset).total_seconds() >= 86400:  # 86400 секунд = 24 часа
             new_limit = 10 if user.verification_free else 5
@@ -276,7 +278,7 @@ def schedule_daily_task(scheduler):
     scheduler.add_job(
     update_free_user_limits,  # Функция для обновления лимитов
     "interval",  # Устанавливаем интервал
-    hours=1,  # Интервал в 1 час
+    minutes=1,  # Интервал в 1 час
     timezone="Europe/Moscow"  # Указываем часовой пояс
 )
     scheduler.add_job(
@@ -519,3 +521,19 @@ async def add_gpt4_mini_limit(session, tg_id: int):
     )
     result = await session.execute(update_stmt)
     await session.commit()
+
+
+@connection
+async def get_last_limit_reset(session, tg_id):
+    # Ищем пользователя по tg_id
+    user = await session.scalar(select(User).where(User.tg_id == tg_id))
+
+    # Если пользователь найден, ищем его подписку
+    if user:
+        # Ищем подписку по id пользователя
+        subscription = await session.get(Subscription, user.subscription_id)
+        
+        # Если подписка найдена, возвращаем last_limit_reset
+        if subscription:
+            return subscription.last_limit_reset
+    return None  # Если пользователь или подписка не найдены
